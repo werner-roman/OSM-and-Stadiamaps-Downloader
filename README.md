@@ -24,3 +24,10 @@ A Python script for downloading and stitching together OpenStreetMap tiles for a
 
 ```bash
 pip install mercantile requests Pillow
+
+python3 osm_downloader.py
+```
+
+## Usage Policy
+
+Keep in mind the [Tile Usage Policy](https://operations.osmfoundation.org/policies/tiles/)
