@@ -1,6 +1,6 @@
 # OSM Map Downloader
 
-A Python script for downloading and stitching together OpenStreetMap tiles for a specific geographic region (Panel 18).
+A Python script for downloading and stitching together OpenStreetMap tiles for a specific geographic region.
 
 ## Features
 
