@@ -9,7 +9,7 @@ import sys
 
 # Disable the decompression bomb protection for large images
 Image.MAX_IMAGE_PIXELS = None  # Remove limit
-# Or set a higher limit: Image.MAX_IMAGE_PIXELS = 250000000
+ImageFile.LOAD_TRUNCATED_IMAGES = True  # Add this to handle potentially truncated images
 
 # Create cache directory if it doesn't exist
 CACHE_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "tile_cache")
@@ -20,15 +20,117 @@ lat_min, lon_min = 47.381, 8.3795  # bottom-left
 lat_max, lon_max = 48.926, 10.6920  # top-right
 
 # Zoom level (adjust depending on desired detail)
-zoom = 10
+zoom = 8
 
-# OSM Tile Policy compliance check
-print("⚠️ IMPORTANT: OpenStreetMap Tile Usage Policy Notice ⚠️")
-print("- This script downloads multiple OSM tiles which should be used sparingly")
-print("- For heavy usage, please use alternative services or set up your own tile server")
-print("- See: https://operations.osmfoundation.org/policies/tiles/")
+# Define available tile servers
+TILE_SERVERS = {
+    "osm": {
+        "name": "OpenStreetMap Standard",
+        "url": "https://tile.openstreetmap.org/{z}/{x}/{y}.png",
+        "attribution": "© OpenStreetMap contributors",
+        "user_agent": "OSM_Downloader/1.0 (Personal non-commercial project; caching enabled; contact: example@example.com)",
+        "format": "png",
+        "requires_key": False
+    },
+    "stamen-toner-lite": {
+        "name": "Stamen Toner Lite (via Stadia)",
+        "url": "https://tiles.stadiamaps.com/tiles/stamen_toner_lite/{z}/{x}/{y}.png",
+        "attribution": "Map tiles by Stamen Design, under CC BY 4.0. Data by OpenStreetMap, under ODbL.",
+        "user_agent": "OSM_Downloader/1.0 (Personal non-commercial project; caching enabled; contact: example@example.com)",
+        "format": "png",
+        "requires_key": True  # Stadia Maps requires API key
+    },
+    "stamen-terrain": {
+        "name": "Stamen Terrain (via Stadia)",
+        "url": "https://tiles.stadiamaps.com/tiles/stamen_terrain/{z}/{x}/{y}.png",
+        "attribution": "Map tiles by Stamen Design, under CC BY 4.0. Data by OpenStreetMap, under ODbL.",
+        "user_agent": "OSM_Downloader/1.0 (Personal non-commercial project; caching enabled; contact: example@example.com)",
+        "format": "png",
+        "requires_key": True  # Stadia Maps requires API key
+    },
+    "stamen-watercolor": {
+        "name": "Stamen Watercolor (via Stadia)",
+        "url": "https://tiles.stadiamaps.com/tiles/stamen_watercolor/{z}/{x}/{y}.jpg",
+        "attribution": "Map tiles by Stamen Design, under CC BY 4.0. Data by OpenStreetMap, under CC BY SA.",
+        "user_agent": "OSM_Downloader/1.0 (Personal non-commercial project; caching enabled; contact: example@example.com)",
+        "format": "jpg",
+        "requires_key": True  # Stadia Maps requires API key
+    },
+    "alidade-smooth": {
+        "name": "Alidade Smooth (via Stadia)",
+        "url": "https://tiles.stadiamaps.com/tiles/alidade_smooth/{z}/{x}/{y}.png",
+        "attribution": "© Stadia Maps, © OpenMapTiles, © OpenStreetMap contributors",
+        "user_agent": "OSM_Downloader/1.0 (Personal non-commercial project; caching enabled; contact: example@example.com)",
+        "format": "png",
+        "requires_key": True  # Stadia Maps requires API key
+    },
+    "alidade-smooth-dark": {
+        "name": "Alidade Smooth Dark (via Stadia)",
+        "url": "https://tiles.stadiamaps.com/tiles/alidade_smooth_dark/{z}/{x}/{y}.png",
+        "attribution": "© Stadia Maps, © OpenMapTiles, © OpenStreetMap contributors",
+        "user_agent": "OSM_Downloader/1.0 (Personal non-commercial project; caching enabled; contact: example@example.com)",
+        "format": "png",
+        "requires_key": True  # Stadia Maps requires API key
+    }
+}
+
+# Let user choose the tile server using numbers
+print("Available tile servers:")
+server_keys = list(TILE_SERVERS.keys())
+for i, key in enumerate(server_keys):
+    server = TILE_SERVERS[key]
+    key_requirement = "(API key required)" if server["requires_key"] else ""
+    print(f"{i+1}. {server['name']} {key_requirement}")
+
+# Get user selection by number
+while True:
+    try:
+        selection = input(f"Choose a tile server (1-{len(server_keys)}, default: 1): ").strip()
+        if selection == "":
+            selected_index = 0  # Default to first option (OSM)
+            break
+        selected_index = int(selection) - 1
+        if 0 <= selected_index < len(server_keys):
+            break
+        else:
+            print(f"Please enter a number between 1 and {len(server_keys)}")
+    except ValueError:
+        print("Please enter a valid number")
+
+# Get the key for the selected server
+tile_server_choice = server_keys[selected_index]
+print(f"Using: {TILE_SERVERS[tile_server_choice]['name']}")
+
+# Handle API key for Stadia Maps services
+api_key = None
+if TILE_SERVERS[tile_server_choice]['requires_key']:
+    print("\n⚠️ This tile server requires a Stadia Maps API key.")
+    print("- Register for a free account at https://client.stadiamaps.com/signup/")
+    print("- Create an API key in your dashboard")
+    print("- Free tier includes 2,500 map views/day (~100,000 tiles/month)")
+    
+    api_key_input = input("Enter your Stadia Maps API key: ").strip()
+    if not api_key_input:
+        print("Error: An API key is required for this tile server.")
+        sys.exit(1)
+    api_key = api_key_input
+    print("API key provided. Using authenticated access.")
+
+# Display usage policy notice
+print("\n⚠️ IMPORTANT: Tile Usage Policy Notice ⚠️")
+print(f"- You're downloading tiles from {TILE_SERVERS[tile_server_choice]['name']}")
+
+# Add source-specific notices
+if "stamen" in tile_server_choice or "alidade" in tile_server_choice:
+    print("- These tiles are hosted by Stadia Maps and require an API key")
+elif tile_server_choice == "osm":
+    print("- OpenStreetMap tile usage policy: https://operations.osmfoundation.org/policies/tiles/")
+
+print("- Please ensure your usage complies with the tile server's policy")
 print("- This script implements caching and rate limiting to reduce server load")
+print(f"- Required attribution: {TILE_SERVERS[tile_server_choice]['attribution']}")
 print("")
+
 user_confirmation = input("Continue with download? (y/n): ")
 if user_confirmation.lower() != 'y':
     print("Download cancelled.")
@@ -55,13 +157,15 @@ successful_downloads = 0
 failed_downloads = 0
 cached_tiles = 0
 
-# Define rate limiting parameters - compliant with OSM tile policy
+# Define rate limiting parameters - compliant with tile server policy
 REQUEST_DELAY = 0.3  # seconds between requests to avoid overloading the server
 
 start_time = time.time()
 for i, tile in enumerate(tiles):
-    # Create a cache filename for this tile
-    cache_file = os.path.join(CACHE_DIR, f"{tile.z}_{tile.x}_{tile.y}.png")
+    # Create a cache filename for this tile that includes the tile server choice
+    # Add API key info to cache filename if used (as a hash)
+    api_key_suffix = f"_k{hashlib.md5(api_key.encode()).hexdigest()[:8]}" if api_key else ""
+    cache_file = os.path.join(CACHE_DIR, f"{tile_server_choice}{api_key_suffix}_{tile.z}_{tile.x}_{tile.y}.{TILE_SERVERS[tile_server_choice]['format']}")
     
     # Progress update
     progress = (i + 1) / total_tiles * 100
@@ -84,10 +188,16 @@ for i, tile in enumerate(tiles):
             # If cache read fails, continue to download
     
     # If not cached, download with rate limiting
-    url = f"https://tile.openstreetmap.org/{tile.z}/{tile.x}/{tile.y}.png"
+    url = TILE_SERVERS[tile_server_choice]['url'].format(z=tile.z, x=tile.x, y=tile.y, r="")
+        
+    # Set up headers with User-Agent and API key if needed
     headers = {
-        "User-Agent": "OSM_Downloader/1.0 (Private usage for mapping project; caching enabled; https://github.com/roman-werner/OSM_Downloader; contact: test@example.com)"
+        "User-Agent": TILE_SERVERS[tile_server_choice]['user_agent']
     }
+    
+    # Add Authorization header for Stadia Maps services
+    if api_key and TILE_SERVERS[tile_server_choice]['requires_key']:
+        headers["Authorization"] = f"Bearer {api_key}"
     
     try:
         # Rate limiting
@@ -140,8 +250,10 @@ right, top = lat_lon_to_pixel(lat_max, lon_max)
 print("Cropping image to exact coordinates...")
 cropped_image = image.crop((left, top, right, bottom))
 
-# Save cropped image
-output_filename = "osm_export_map.png"
+# Save cropped image with appropriate name based on tile service
+api_key_indicator = "_auth" if api_key else ""
+output_filename = f"{tile_server_choice}{api_key_indicator}_map_z{zoom}.{TILE_SERVERS[tile_server_choice]['format']}"
 cropped_image.save(output_filename)
 print(f"✅ Saved as {output_filename}")
 print(f"Final image size: {cropped_image.width}x{cropped_image.height} pixels")
+print(f"Attribution: {TILE_SERVERS[tile_server_choice]['attribution']}")

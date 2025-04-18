@@ -1,2 +1,4 @@
-tile_cache
-osm_export_map.png
+tile_cache/*
+.venv
+*.png
+!example.png
